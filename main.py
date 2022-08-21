@@ -39,18 +39,43 @@ def go(config: DictConfig):
 
     if "preprocess" in steps_to_execute:
 
-        ## YOUR CODE HERE: call the preprocess step
-        pass
+        _ = mlflow.run(
+            os.path.join(root_path, "preprocess"),
+            "main",
+            parameters={
+                "input_artifact": "amaru-utec/exercise_14/raw_data.parquet:latest",
+                "artifact_name": "preprocessed_data.csv",
+                "artifact_type": "preprocessed_data",
+                "artifact_description": "Preprocessed data"
+,            }
+       )
 
     if "check_data" in steps_to_execute:
 
-        ## YOUR CODE HERE: call the check_data step
-        pass
+        _ = mlflow.run(
+            os.path.join(root_path, "check_data"),
+            "main",
+            parameters={
+                "reference_artifact": "amaru-utec/exercise_14/preprocessed_data.csv:latest",
+                "sample_artifact": "amaru-utec/exercise_14/preprocessed_data.csv:latest",
+                "ks_alpha": config["data"]["ks_alpha"],
+            }
+        )
 
     if "segregate" in steps_to_execute:
 
-        ## YOUR CODE HERE: call the segregate step
-        pass
+        _ = mlflow.run(
+            os.path.join(root_path, "segregate"),
+            "main",
+            parameters={
+                "input_artifact": "amaru-utec/exercise_14/preprocessed_data.csv:latest",
+                "artifact_root": "data",
+                "artifact_type": "split_data",
+                "test_size": config["data"]["test_size"],
+                "random_state": config["main"]["random_seed"],
+                "stratify": config["data"]["stratify"],
+            }
+        )
 
     if "random_forest" in steps_to_execute:
 
