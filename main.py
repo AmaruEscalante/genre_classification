@@ -2,6 +2,7 @@ import mlflow
 import os
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from omegaconf.listconfig import ListConfig
 
 
 # This automatically reads in the configuration
@@ -9,9 +10,9 @@ from omegaconf import DictConfig, OmegaConf
 def go(config: DictConfig):
 
     # Setup the wandb experiment. All runs will be grouped under this name
-    os.environ["WANDB_PROJECT"] = config["main"]["project_name"]
+    project_name = config["main"]["project_name"]
+    os.environ["WANDB_PROJECT"] = project_name
     os.environ["WANDB_RUN_GROUP"] = config["main"]["experiment_name"]
-
     # You can get the path at the root of the MLflow project with this:
     root_path = hydra.utils.get_original_cwd()
 
@@ -20,7 +21,7 @@ def go(config: DictConfig):
         # This was passed on the command line as a comma-separated list of steps
         steps_to_execute = config["main"]["execute_steps"].split(",")
     else:
-        assert isinstance(config["main"]["execute_steps"], list)
+        assert isinstance(config["main"]["execute_steps"], ListConfig)
         steps_to_execute = config["main"]["execute_steps"]
 
     # Download step
@@ -43,7 +44,7 @@ def go(config: DictConfig):
             os.path.join(root_path, "preprocess"),
             "main",
             parameters={
-                "input_artifact": "amaru-utec/exercise_14/raw_data.parquet:latest",
+                "input_artifact": f"amaru-utec/{project_name}/raw_data.parquet:latest",
                 "artifact_name": "preprocessed_data.csv",
                 "artifact_type": "preprocessed_data",
                 "artifact_description": "Preprocessed data"
@@ -56,8 +57,8 @@ def go(config: DictConfig):
             os.path.join(root_path, "check_data"),
             "main",
             parameters={
-                "reference_artifact": "amaru-utec/exercise_14/preprocessed_data.csv:latest",
-                "sample_artifact": "amaru-utec/exercise_14/preprocessed_data.csv:latest",
+                "reference_artifact": f"amaru-utec/{project_name}/preprocessed_data.csv:latest",
+                "sample_artifact": f"amaru-utec/{project_name}/preprocessed_data.csv:latest",
                 "ks_alpha": config["data"]["ks_alpha"],
             }
         )
@@ -68,7 +69,7 @@ def go(config: DictConfig):
             os.path.join(root_path, "segregate"),
             "main",
             parameters={
-                "input_artifact": "amaru-utec/exercise_14/preprocessed_data.csv:latest",
+                "input_artifact": f"amaru-utec/{project_name}/preprocessed_data.csv:latest",
                 "artifact_root": "data",
                 "artifact_type": "split_data",
                 "test_size": config["data"]["test_size"],
@@ -85,14 +86,29 @@ def go(config: DictConfig):
         with open(model_config, "w+") as fp:
             fp.write(OmegaConf.to_yaml(config["random_forest_pipeline"]))
 
-        ## YOUR CODE HERE: call the random_forest step
-        pass
+        _ = mlflow.run(
+            os.path.join(root_path, "random_forest"),
+            "main",
+            parameters={
+                "train_data": f"{project_name}/data_train.csv:latest",
+                "model_config": model_config,
+                "export_artifact": config["random_forest_pipeline"]["export_artifact"],
+                "random_seed": config["main"]["random_seed"],
+                "val_size": config["data"]["val_size"],
+                "stratify": config["data"]["stratify"],
+            }
+        )
 
     if "evaluate" in steps_to_execute:
 
-        ## YOUR CODE HERE: call the evaluate step
-        pass
-
+        _ = mlflow.run(
+            os.path.join(root_path, "evaluate"),
+            "main",
+            parameters={
+                "model_export": f"{project_name}/model_export:latest",
+                "test_data": f"{project_name}/data_test.csv:latest",
+            }
+        )
 
 if __name__ == "__main__":
     go()
